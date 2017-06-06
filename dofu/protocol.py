@@ -1,4 +1,4 @@
-from json import dumps
+from ujson import dumps
 
 
 class Request(object):
@@ -16,21 +16,32 @@ class Request(object):
         self.extra = extra
 
     def to_dict(self):
-        val = {
+        return {
             'ver': self.ver,
-            'method': self.ver,
-            'payload': self.ver,
+            'method': self.method,
+            'payload': self.payload,
+            'extra': self.extra or {}
         }
-
-        if self.extra:
-            val['extra'] = self.extra
-
-        return val
 
     def to_json(self):
         return dumps(self.to_dict())
 
 
 class Response(object):
-    def __init__(self, payload, errmsg, errtype, code=200):
-        pass
+    __slots__ = ['result', 'error']
+
+    def __init__(self, result=None, error=None):
+        assert any([result, error])
+        assert not all([result, error])
+
+        self.result = result
+        self.error = error
+
+    def to_dict(self):
+        if self.result:
+            return {'result': self.result}
+        else:
+            return {'error': self.error}
+
+    def to_json(self):
+        return dumps(self.to_dict())

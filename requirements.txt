@@ -1,1 +1,2 @@
 sanic==0.5.4
+asyncio_redis==0.14.3

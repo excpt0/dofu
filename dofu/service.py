@@ -26,10 +26,10 @@ class ErrHandler(ErrorHandler):
 
 
 class DofuService:
-    def __init__(self, name, host='127.0.0.1', port=8080, uri='/', ssl=None, service_discover=None):
+    def __init__(self, name, host='127.0.0.1', port=8080, rpc_uri=None, ssl=None, service_discover=None):
         self.name = name
         self._sanic = Sanic(error_handler=ErrHandler)
-        self.methods = defaultdict(dict)
+        self.rpc_methods = defaultdict(dict)
         self.service_discover = service_discover
 
         self.settings = {
@@ -37,9 +37,11 @@ class DofuService:
             'port': port,
             'ssl': ssl,
         }
-        self._sanic.add_route(self.rpc_router, uri=uri, methods=frozenset({'POST'}))
+        if rpc_uri:
+            self._sanic.add_route(self.rpc_router, uri=rpc_uri, methods=frozenset({'POST'}))
 
     async def rpc_router(self, request:SanicReq):
+        log_svc.debug('rpc request: %s' % request.body)
         try:
             rpc_req = Request(**request.json())
         except (InvalidUsage, TypeError) as e:
@@ -47,7 +49,7 @@ class DofuService:
             raise RequestError
 
         try:
-            m = self.methods[rpc_req.method][rpc_req.ver]
+            m = self.rpc_methods[rpc_req.method][rpc_req.ver]
         except KeyError:
             log_svc.error(UnknownMethodError, exc_info=True)
             raise UnknownMethodError
@@ -63,4 +65,10 @@ class DofuService:
 
     def run(self):
         self._sanic.run(**self.settings)
+
+    def rpc(self, method_name, handler, ver=1):
+        self.rpc_methods[method_name][ver] = handler
+
+    def http(self, handler, uri, method):
+        self._sanic.add_route(handler, uri, method)
 

@@ -1,5 +1,6 @@
 from asyncio import iscoroutine
 from collections import defaultdict
+from uuid import uuid4
 
 from sanic import Sanic
 from sanic.exceptions import InvalidUsage
@@ -8,9 +9,11 @@ from sanic.request import Request as SanicReq
 from sanic.response import json
 
 from dofu import errmsg
+from dofu.discovery import AliveService, ServiceNode
 from dofu.exceptions import RequestError, UnknownMethodError
 from dofu.log import log_svc
 from dofu.protocol import Request, Response
+from dofu.rpc import RPCWrap
 
 
 class ErrHandler(ErrorHandler):
@@ -26,13 +29,16 @@ class ErrHandler(ErrorHandler):
 
 
 class DofuService:
-    def __init__(self, name, host='127.0.0.1', port=8080, rpc_uri=None, ssl=None, service_discover=None):
-        self.name = name
-        self._sanic = Sanic(error_handler=ErrHandler)
-        self.rpc_methods = defaultdict(dict)
-        self.service_discover = service_discover
+    _node_id = None
 
-        self.settings = {
+    def __init__(self, name, host='127.0.0.1', port=8080, rpc_uri=None, ssl=None, service_discovery=None):
+        self.name = name
+        self._sanic = Sanic(error_handler=ErrHandler())
+        self.rpc_methods = defaultdict(dict)
+        self.service_discovery = service_discovery
+        self._rpc_uri = rpc_uri
+
+        self._sanic_settings = {
             'host': host,
             'port': port,
             'ssl': ssl,
@@ -40,10 +46,22 @@ class DofuService:
         if rpc_uri:
             self._sanic.add_route(self.rpc_router, uri=rpc_uri, methods=frozenset({'POST'}))
 
+    @property
+    def node_id(self):
+        if not self._node_id:
+            self._node_id = str(uuid4())
+        return self._node_id
+
+    @property
+    def rpc(self):
+        if not self.service_discovery:
+            raise Exception('Discovery service does not initialized')
+        return RPCWrap(self.service_discovery)
+
     async def rpc_router(self, request:SanicReq):
         log_svc.debug('rpc request: %s' % request.body)
         try:
-            rpc_req = Request(**request.json())
+            rpc_req = Request(**request.json)
         except (InvalidUsage, TypeError) as e:
             log_svc.error(RequestError, exc_info=True)
             raise RequestError
@@ -64,11 +82,31 @@ class DofuService:
         self._sanic.listeners['before_server_start'].append(task)
 
     def run(self):
-        self._sanic.run(**self.settings)
+        if self.service_discovery:
+            svc = AliveService(service_name=self.name, stype='rpc')
+            node = ServiceNode(
+                service_name=self.name,
+                node_id=self.node_id,
+                host=self._sanic_settings['host'],
+                port=self._sanic_settings['port'],
+                uri=self._rpc_uri,
+            )
+            async def __init(app, loop):
+                await self.service_discovery.run(loop, service=svc, node=node)
+            self.add_pre_task(__init)
 
-    def rpc(self, method_name, handler, ver=1):
-        self.rpc_methods[method_name][ver] = handler
+        self._sanic.run(**self._sanic_settings)
+
+
+
+    # def register_rpc(self, method_name, handler, ver=1):
+    #     self.rpc_methods[method_name][ver] = handler
 
     def http(self, handler, uri, method):
         self._sanic.add_route(handler, uri, method)
 
+    def register(self, method_name, ver=1):
+        def wrapped(handler):
+            self.rpc_methods[method_name][ver] = handler
+            return handler
+        return wrapped

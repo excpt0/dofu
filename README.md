@@ -1,6 +1,15 @@
 ## dofu
 Fast and simple framework for building http microservices on python 3.5+ with service discovery. Dofu is using sanic and aiohttp.
 
+### Installation
+```sh
+$ python -m pip install git+https://github.com/excpt0/dofu
+```
+
+### Requirements
+ - python 3.5+
+ - redis (only for service discovery)
+
 ### Example
 ```python
 from dofu.discovery import RedisServiceDiscovery

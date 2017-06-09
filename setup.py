@@ -2,7 +2,9 @@ from setuptools import setup, find_packages
 
 requires = [
     'sanic==0.5.4',
+    'aiohttp>=2.0.5',
     'asyncio_redis==0.14.3',
+    'ujson>=1.3.5',
 ]
 setup(
     name='dofu',

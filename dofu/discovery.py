@@ -25,20 +25,21 @@ class ServiceDiscovery:
 
 
 class ServiceNode:
-    def __init__(self, node_id, service_name, host, port, uri, is_alive=True):
+    def __init__(self, node_id, service_name, host, port, uri, protocol='http', is_alive=True):
         self.node_id = node_id
         self.service_name = service_name
         self.host = host
         self.port = port
         self.uri = uri
+        self.protocol = protocol
         self.is_alive = is_alive
 
     @property
     def url(self):
-        uri = '/' + self.uri
-        if uri == '//':
-            uri = '/'
-        return '{host}:{port}/{uri}'.format(host=self.host, port=self.port, uri=uri)
+        uri = self.uri
+        if not self.uri.startswith('/'):
+            uri = '/' + self.uri
+        return '{proto}://{host}:{port}{uri}'.format(proto=self.protocol, host=self.host, port=self.port, uri=uri)
 
     def to_dict(self):
         return {
@@ -47,6 +48,7 @@ class ServiceNode:
             'service_name': self.service_name,
             'port': self.port,
             'uri': self.uri,
+            'protocol': self.protocol,
         }
 
 
@@ -120,7 +122,7 @@ class RedisServiceDiscovery(ServiceDiscovery):
         if not self._services_urls_cache[service_name]:
             s = self.get_service_by_name(service_name)
             for n in s.nodes_list:
-                self._services_urls_cache[s.service_name] = n.url
+                self._services_urls_cache[s.service_name].append(n.url)
         return self._services_urls_cache[service_name]
 
     def stop(self):
@@ -134,7 +136,6 @@ class RedisServiceDiscovery(ServiceDiscovery):
         self._current_node = node
         await self.connect_redis()
         await self.declare_service(service)
-        # loop = get_event_loop()
 
         if self.watch:
             self._watch_task = loop.create_task(self.watch_alive())
@@ -194,10 +195,7 @@ class RedisServiceDiscovery(ServiceDiscovery):
                 pass
 
     async def watch_alive(self):
-        log_svc.debug('Started watching')
         while True:
-            log_svc.debug('watching iteration')
-
             svc_keys = await (await self._redis_con.keys(REDIS_ALL_SERVICES_PATTERN + '*')).aslist()
             current_svc = [x.replace(REDIS_ALL_SERVICES_PATTERN + ':', '') for x in svc_keys]
 
@@ -207,10 +205,7 @@ class RedisServiceDiscovery(ServiceDiscovery):
             self.remove_services(dead_svc)
             await self.append_services_by_name(new_svc_names)
 
-            log_svc.debug('watching iteration')
-
-
-            node_keys = await (await self._redis_con.keys(REDIS_ALL_SERVICES_PATTERN + '*')).aslist()
+            node_keys = await (await self._redis_con.keys(REDIS_ALL_NODES_PATTERN + '*')).aslist()
             current_nodes = [x.replace(REDIS_ALL_NODES_PATTERN + ':', '') for x in node_keys]
             current_nodes_set = set(current_nodes)
             stored_nodes_set = set(self._alive_nodes.keys())
@@ -223,8 +218,6 @@ class RedisServiceDiscovery(ServiceDiscovery):
             await sleep(0.01)
 
     async def set_node_health(self):
-        log_svc.debug('Started health set')
-
         while True:
             if not self._current_node_cache:
                 self._current_node_cache = dumps(self._current_node.to_dict())
@@ -234,4 +227,3 @@ class RedisServiceDiscovery(ServiceDiscovery):
                 expire=self.ttl,
                 only_if_not_exists=True)
             await sleep(self.health_set_interval)
-            log_svc.debug('SHealth set iter')

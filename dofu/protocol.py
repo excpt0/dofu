@@ -13,7 +13,7 @@ class Request(object):
         self.method = method
         self.payload = payload
         self.ver = ver
-        self.extra = extra
+        self.extra = extra or {}
 
     def to_dict(self):
         return {

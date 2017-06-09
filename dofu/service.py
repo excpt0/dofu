@@ -1,5 +1,6 @@
 from asyncio import iscoroutine
 from collections import defaultdict
+from traceback import format_exc
 from uuid import uuid4
 
 from sanic import Sanic
@@ -9,6 +10,7 @@ from sanic.request import Request as SanicReq
 from sanic.response import json
 
 from dofu import errmsg
+from dofu.descriptors import register_descriptor, PASS_SVC_DESCRIPTOR, has_descriptor
 from dofu.discovery import AliveService, ServiceNode
 from dofu.exceptions import RequestError, UnknownMethodError
 from dofu.log import log_svc
@@ -24,6 +26,8 @@ class ErrHandler(ErrorHandler):
             msg = errmsg.UNKNOWN_METHOD
         else:
             msg = errmsg.SERVER_ERROR
+            self.log(format_exc())
+            log_svc.error(str(exception))
 
         return json(Response(error={'msg': msg}).to_dict())
 
@@ -65,14 +69,17 @@ class DofuService:
         except (InvalidUsage, TypeError) as e:
             log_svc.error(RequestError, exc_info=True)
             raise RequestError
+        method_args = rpc_req.payload
 
         try:
             m = self.rpc_methods[rpc_req.method][rpc_req.ver]
+            if has_descriptor(m, PASS_SVC_DESCRIPTOR):
+                method_args['svc'] = self
         except KeyError:
             log_svc.error(UnknownMethodError, exc_info=True)
             raise UnknownMethodError
 
-        result = m(**rpc_req.payload)
+        result = m(**method_args)
         if iscoroutine(result):
             result = await result
 
@@ -97,16 +104,17 @@ class DofuService:
 
         self._sanic.run(**self._sanic_settings)
 
+    def register_http(self, uri, method):
+        def wrapped(handler):
+            self._sanic.add_route(handler, uri, method)
+            return handler
+        return wrapped
 
-
-    # def register_rpc(self, method_name, handler, ver=1):
-    #     self.rpc_methods[method_name][ver] = handler
-
-    def http(self, handler, uri, method):
-        self._sanic.add_route(handler, uri, method)
-
-    def register(self, method_name, ver=1):
+    def register(self, method_name, ver=1, pass_svc=False):
+        # decorator
         def wrapped(handler):
             self.rpc_methods[method_name][ver] = handler
+            if pass_svc:
+                register_descriptor(handler, PASS_SVC_DESCRIPTOR)
             return handler
         return wrapped

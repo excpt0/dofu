@@ -1,10 +1,8 @@
-## dofu
-Fast and simple framework for building http microservices on python 3.5+ with service discovery. Dofu is using sanic and aiohttp.
+from sanic.response import json
 
-### Example
-```python
 from dofu.discovery import RedisServiceDiscovery
 from dofu.service import DofuService
+
 
 service = DofuService('simple', rpc_uri='/', service_discovery=RedisServiceDiscovery())
 
@@ -27,11 +25,3 @@ async def http_handler(request):
 
 if __name__ == '__main__':
     service.run()
-
-```
-
-```sh
-$ curl -XPOST 127.0.0.1:8080 -d'{"method": "foo", "payload": {"arg": "hello!"}}
-$ curl -XPOST 127.0.0.1:8080 -d'{"method": "bar", "payload": {"arg": "foobar"}}
-$ curl -XPOST 127.0.0.1:8080/hello
-```

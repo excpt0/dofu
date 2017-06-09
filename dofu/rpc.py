@@ -8,18 +8,19 @@ from dofu.protocol import Request, Response
 class SessionCache:
     ses = None
 
-    def __init__(self):
-        if not self.ses:
+    @classmethod
+    def get(cls):
+        if not cls.ses:
             SessionCache.ses = aiohttp.ClientSession()
-
-    def __getattr__(self, item):
-        getattr(self.ses, item)
+        return cls.ses
 
 
-async def perform_rpc_request(url, ver=1, **kwargs):
-    ses = SessionCache()
-    async with ses.post(url=url, data=Request(**kwargs).to_json()) as http_resp:
-        return Response(**http_resp).to_dict()
+async def perform_rpc_request(url, request):
+    ses = SessionCache.get()
+    request_data = request.to_json()
+    async with ses.post(url=url, data=request_data) as http_resp:
+        data = await http_resp.json()
+        return Response(**data).to_dict()
 
 
 class RPCWrap:
@@ -33,7 +34,10 @@ class RPCWrap:
 
     def __call__(self, ver=1, **kwargs):
         urls = self.service_discovery.service_urls(self.service_name)
-        return perform_rpc_request(choice(urls), ver, **kwargs)
+        if not urls:
+            raise Exception('No alive nodes to execute the request')
+        request = Request(self.method, kwargs, ver)
+        return perform_rpc_request(choice(urls), request)
 
     def __getattr__(self, item):
         if not self.service_name:

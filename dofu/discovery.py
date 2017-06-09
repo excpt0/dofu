@@ -1,10 +1,9 @@
-from asyncio import get_event_loop, sleep
+from asyncio import sleep
 from collections import defaultdict
 from ujson import loads, dumps
 
 from asyncio_redis import Connection
 
-from dofu.log import log_svc
 
 REDIS_ALL_SERVICES_PATTERN = 'dofu-service'
 REDIS_ALL_NODES_PATTERN = 'dofu-node'

@@ -105,6 +105,7 @@ class DofuService:
         self._sanic.run(**self._sanic_settings)
 
     def register_http(self, uri, method):
+        #decorator
         def wrapped(handler):
             self._sanic.add_route(handler, uri, method)
             return handler

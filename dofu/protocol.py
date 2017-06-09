@@ -20,7 +20,7 @@ class Request(object):
             'ver': self.ver,
             'method': self.method,
             'payload': self.payload,
-            'extra': self.extra or {}
+            'extra': self.extra
         }
 
     def to_json(self):

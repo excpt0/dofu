@@ -31,7 +31,7 @@ if __name__ == '__main__':
 ```
 
 ```sh
-$ curl -XPOST 127.0.0.1:8080 -d'{"method": "foo", "payload": {"arg": "hello!"}}
-$ curl -XPOST 127.0.0.1:8080 -d'{"method": "bar", "payload": {"arg": "foobar"}}
+$ curl -XPOST 127.0.0.1:8080 -d'{"method": "foo", "payload": {"arg": "hello!"}}'
+$ curl -XPOST 127.0.0.1:8080 -d'{"method": "bar", "payload": {"arg": "foobar"}}'
 $ curl -XPOST 127.0.0.1:8080/hello
 ```
